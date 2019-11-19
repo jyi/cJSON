@@ -1,5 +1,7 @@
 CJSON_OBJ = cJSON.o
 UTILS_OBJ = cJSON_Utils.o
+CJSON_OBJ_KLEE = cJSON.klee.o
+UTILS_OBJ_KLEE = cJSON_Utils.klee.o
 CJSON_LIBNAME = libcjson
 UTILS_LIBNAME = libcjson_utils
 CJSON_TEST = cJSON_test
@@ -24,6 +26,9 @@ INSTALL_LIBRARY_PATH = $(DESTDIR)$(PREFIX)/$(LIBRARY_PATH)
 
 INSTALL ?= cp -a
 
+AR_KLEE = llvm-ar
+CC_KLEE = llvm-gcc
+
 # validate gcc version for use fstack-protector-strong
 MIN_GCC_VERSION = "4.9"
 GCC_VERSION := "`$(CC) -dumpversion`"
@@ -35,6 +40,8 @@ else
 endif
 
 R_CFLAGS = -fPIC -std=c89 -pedantic -Wall -Werror -Wstrict-prototypes -Wwrite-strings -Wshadow -Winit-self -Wcast-align -Wformat=2 -Wmissing-prototypes -Wstrict-overflow=2 -Wcast-qual -Wc++-compat -Wundef -Wswitch-default -Wconversion $(CFLAGS)
+
+R_CFLAGS_KLEE = -fPIC -std=c89 -pedantic -Wall -Werror -Wstrict-prototypes -Wwrite-strings -Wshadow -Winit-self -Wcast-align -Wformat=2 -Wmissing-prototypes -Wstrict-overflow=2 -Wc++-compat -Wundef -Wswitch-default -fPIC
 
 uname := $(shell sh -c 'uname -s 2>/dev/null || echo false')
 
@@ -54,12 +61,14 @@ CJSON_SHARED = $(CJSON_LIBNAME).$(SHARED)
 CJSON_SHARED_VERSION = $(CJSON_LIBNAME).$(SHARED).$(LIBVERSION)
 CJSON_SHARED_SO = $(CJSON_LIBNAME).$(SHARED).$(CJSON_SOVERSION)
 CJSON_STATIC = $(CJSON_LIBNAME).$(STATIC)
+CJSON_STATIC_KLEE = $(CJSON_LIBNAME).klee.$(STATIC)
 
 #cJSON_Utils library names
 UTILS_SHARED = $(UTILS_LIBNAME).$(SHARED)
 UTILS_SHARED_VERSION = $(UTILS_LIBNAME).$(SHARED).$(LIBVERSION)
 UTILS_SHARED_SO = $(UTILS_LIBNAME).$(SHARED).$(UTILS_SOVERSION)
 UTILS_STATIC = $(UTILS_LIBNAME).$(STATIC)
+UTILS_STATIC_KLEE = $(UTILS_LIBNAME).klee.$(STATIC)
 
 SHARED_CMD = $(CC) -shared -o
 
@@ -69,15 +78,18 @@ all: shared static tests
 
 shared: $(CJSON_SHARED) $(UTILS_SHARED)
 
-static: $(CJSON_STATIC) $(UTILS_STATIC)
+static: $(CJSON_STATIC) $(CJSON_STATIC_KLEE) $(UTILS_STATIC) $(UTILS_STATIC_KLEE)
 
 tests: $(CJSON_TEST)
 
 test: tests
 	./$(CJSON_TEST)
 
-.c.o:
+%.o : %.c
 	$(CC) -c $(R_CFLAGS) $<
+
+%.klee.o : %.c
+	$(CC_KLEE) -g -O0 --emit-llvm -c $(R_CFLAGS_KLEE) -o $@ $<
 
 #tests
 #cJSON
@@ -88,9 +100,15 @@ $(CJSON_TEST): $(CJSON_TEST_SRC) cJSON.h
 #cJSON
 $(CJSON_STATIC): $(CJSON_OBJ)
 	$(AR) rcs $@ $<
+#cJSON.klee
+$(CJSON_STATIC_KLEE): $(CJSON_OBJ_KLEE)
+	$(AR_KLEE) rcs $@ $<
 #cJSON_Utils
 $(UTILS_STATIC): $(UTILS_OBJ)
 	$(AR) rcs $@ $<
+#cJSON_Utils.klee
+$(UTILS_STATIC_KLEE): $(UTILS_OBJ_KLEE)
+	$(AR_KLEE) rcs $@ $<
 
 #shared libraries .so.1.0.0
 #cJSON
@@ -151,7 +169,7 @@ uninstall-utils:
 uninstall: uninstall-utils uninstall-cjson
 
 clean:
-	$(RM) $(CJSON_OBJ) $(UTILS_OBJ) #delete object files
-	$(RM) $(CJSON_SHARED) $(CJSON_SHARED_VERSION) $(CJSON_SHARED_SO) $(CJSON_STATIC) #delete cJSON
+	$(RM) $(CJSON_OBJ) $(UTILS_OBJ) $(CJSON_OBJ_KLEE) $(UTILS_OBJ_KLEE) #delete object files
+	$(RM) $(CJSON_SHARED) $(CJSON_SHARED_VERSION) $(CJSON_SHARED_SO) $(CJSON_STATIC) $(CJSON_STATIC_KLEE) #delete cJSON
 	$(RM) $(UTILS_SHARED) $(UTILS_SHARED_VERSION) $(UTILS_SHARED_SO) $(UTILS_STATIC) #delete cJSON_Utils
 	$(RM) $(CJSON_TEST)  #delete test
